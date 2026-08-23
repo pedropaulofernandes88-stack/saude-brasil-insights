@@ -1,0 +1,30 @@
+{
+  "generated_at_utc": "2026-08-23T19:01:32.117295+00:00",
+  "population_year": 2025,
+  "sources": {
+    "population": "https://apisidra.ibge.gov.br/values/t/6579/n6/all/v/9324/p/last%201?formato=json",
+    "municipal_boundaries": "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo+json&qualidade=minima&intrarregiao=municipio",
+    "ubs": "https://apidadosabertos.saude.gov.br/assistencia-a-saude/unidade-basicas-de-saude",
+    "active_hospitals": "https://apidadosabertos.saude.gov.br/cnes/estabelecimentos"
+  },
+  "quality": {
+    "ubs_rows_invalid_code": 0,
+    "ubs_rows_remapped": 1,
+    "ubs_unique": 46848,
+    "hospital_rows_invalid_code": 0,
+    "hospitals_unique_active": 6457,
+    "municipalities": 5571,
+    "municipalities_with_ubs": 5480,
+    "municipalities_with_hospital": 2868,
+    "unmatched_ubs_groups": 0,
+    "unmatched_hospital_groups": 0,
+    "population_total": 213421037,
+    "geojson_features": 5570,
+    "municipalities_without_geometry": 1
+  },
+  "methodology": {
+    "ubs_rate": "UBS unicas por 10 mil habitantes",
+    "hospital_rate": "estabelecimentos hospitalares ativos por 100 mil habitantes",
+    "gap_index": "complemento do percentil ponderado de disponibilidade: 65% UBS e 35% estabelecimentos hospitalares ativos"
+  }
+}
