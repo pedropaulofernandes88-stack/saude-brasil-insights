@@ -2,6 +2,14 @@
 
 [![CI](https://github.com/pedropaulofernandes88-stack/saude-brasil-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/pedropaulofernandes88-stack/saude-brasil-insights/actions/workflows/ci.yml)
 
+## Demonstração ao vivo
+
+[Explorar os 5.571 municípios no hub IA e Dados em Saúde](https://ia-dados-saude-pedro.pedropaulofernandes8.chatgpt.site/demos/saude-brasil-insights)
+
+A demo web utiliza o snapshot municipal versionado e permite buscar, filtrar e ordenar indicadores.
+O pipeline ETL, as análises de sensibilidade e a aplicação Streamlit completa permanecem neste
+repositório.
+
 Painel interativo e pipeline de dados para explorar diferenças na disponibilidade cadastrada de
 Unidades Básicas de Saúde (UBS) e estabelecimentos hospitalares ativos entre os municípios
 brasileiros.
