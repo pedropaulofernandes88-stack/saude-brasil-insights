@@ -1,53 +1,139 @@
-# Metodologia e limites
+# Metodologia
 
-## Pergunta do MVP
+## 1. Objetivo analítico
 
-Como varia, entre os municípios brasileiros, a disponibilidade cadastrada de atenção básica e
-estabelecimentos hospitalares ativos em relação à população estimada?
+O Saúde Brasil Insights descreve como a disponibilidade **local e cadastrada** de UBS e
+estabelecimentos hospitalares ativos varia entre os municípios brasileiros em relação à população.
 
-O projeto responde a uma pergunta descritiva. Ele não identifica causalidade e não classifica a
-qualidade clínica de serviços.
+A unidade de análise é o município. O projeto não estima causalidade, eficiência, qualidade clínica
+ou suficiência da rede regional.
 
-## Unidade de análise
+## 2. Escopo do MVP
 
-Município. A população vem da estimativa municipal mais recente disponibilizada na tabela 6579 do
-SIDRA. UBS e hospitais ativos vêm da API de Dados Abertos do Ministério da Saúde.
+O MVP combina quatro conjuntos:
 
-## Integração
+1. população municipal estimada pelo IBGE;
+2. relação de UBS publicada pelo Ministério da Saúde;
+3. estabelecimentos hospitalares ativos do CNES;
+4. malha municipal simplificada do IBGE.
 
-- O código municipal utilizado na relação de UBS possui seis dígitos; ele é associado aos seis
-  primeiros dígitos do código IBGE de sete dígitos.
-- O código legado `530040`, usado por uma UBS de Ceilândia, é remapeado para Brasília (`530010`),
-  pois Ceilândia é uma região administrativa do Distrito Federal e não um município.
-- Hospitais são selecionados no CNES por situação ativa e tipos hospital geral, especializado,
-  unidade mista e hospital-dia isolado.
-- O relatório em `data/processed/metadata.json` registra grupos que não puderam ser associados.
+Não entram no índice: leitos, profissionais, produção assistencial, ocupação, deslocamento,
+especialidades, demanda reprimida ou desfechos de saúde.
 
-## Índice exploratório
+## 3. Extração
 
-Cada taxa é transformada em percentil nacional. A disponibilidade relativa combina:
+O pipeline consulta as APIs oficiais no momento da atualização. As respostas do Ministério da Saúde
+são paginadas e possuem retentativas para falhas HTTP transitórias.
 
-- 65% UBS por 10 mil habitantes;
-- 35% estabelecimentos hospitalares ativos por 100 mil habitantes.
+Embora a documentação pública descreva `offset` como número de página, o comportamento observado
+no serviço é de deslocamento de registros. Por isso o cliente avança `offset` pelo tamanho efetivo da
+página, evitando janelas sobrepostas e duplicação.
 
-O índice de lacuna é o complemento dessa disponibilidade, em uma escala de 0 a 100. Os pesos são
-uma decisão explícita do MVP, não um consenso clínico ou regulatório.
+O snapshot atual foi gerado em `2026-08-23T19:01:32Z` e utiliza população de referência de 2025.
+Uma nova execução pode produzir números diferentes conforme os cadastros oficiais forem atualizados.
 
-## Riscos de interpretação
+## 4. Regras de transformação
 
-1. Um município sem hospital pode fazer parte de uma rede regional adequada.
-2. Cadastro não garante operação, equipe, vaga, qualidade ou acesso real.
-3. Taxas em populações pequenas são instáveis.
-4. A integração nominal de hospitais pode gerar falsos zeros quando os nomes divergem.
-5. O índice relativo sempre produz melhores e piores posições, mesmo que a oferta absoluta seja
-   suficiente ou insuficiente para todos.
-6. Leitos não entram no MVP: o endpoint agregado encontrado não expõe competência temporal e
-   poderia somar snapshots históricos como se fossem observações atuais.
-7. Boa Esperança do Norte (MT) integra os indicadores de 2025, mas ainda não está na malha
-   simplificada devolvida pelo serviço do IBGE e, portanto, não aparece no mapa.
+### 4.1 População
 
-## Uso responsável
+- O código IBGE é preservado com sete dígitos em `ibge7`.
+- Os seis primeiros dígitos formam `ibge6`, chave usada para integrar os dados do DATASUS.
+- Município e UF são separados do rótulo devolvido pelo SIDRA.
+- Populações ausentes, não numéricas ou não positivas interrompem o pipeline.
+- Códigos municipais duplicados também interrompem o pipeline.
 
-O painel serve para exploração, transparência e geração de hipóteses. Uma decisão pública exigiria
-validação por especialistas, indicadores de demanda e desfecho, análise de deslocamento e revisão
-da atualização cadastral.
+### 4.2 UBS
+
+- UBS são deduplicadas pela combinação de código municipal e código CNES.
+- O código legado `530040`, associado a uma UBS de Ceilândia, é remapeado para `530010`
+  (Brasília), pois a análise é municipal e Ceilândia é uma região administrativa do Distrito
+  Federal.
+- Códigos municipais inválidos são contabilizados nos metadados.
+
+### 4.3 Estabelecimentos hospitalares
+
+- A extração solicita apenas registros com `status=1` no CNES.
+- São incluídos os tipos CNES: hospital geral (`5`), hospital especializado (`7`), unidade mista
+  (`15`) e hospital-dia isolado (`62`).
+- Estabelecimentos são deduplicados por código CNES.
+- A integração é feita por `codigo_municipio`, sem associação aproximada por nome.
+- Os campos cadastrais de centro cirúrgico e centro obstétrico são agregados por município.
+
+### 4.4 Valores ausentes
+
+Depois de integrar a dimensão completa de municípios com as bases cadastrais, ausência de UBS ou
+hospital associado é representada por zero. Os grupos não associados são reportados em
+`metadata.json`, permitindo distinguir zero analítico de falha de integração.
+
+## 5. Indicadores per capita
+
+Para um município `m`:
+
+```text
+UBS por 10 mil(m) = UBS(m) / população(m) × 10.000
+
+Hospitais por 100 mil(m) = hospitais(m) / população(m) × 100.000
+
+Centros cirúrgicos por 100 mil(m) = centros cirúrgicos(m) / população(m) × 100.000
+
+Centros obstétricos por 100 mil(m) = centros obstétricos(m) / população(m) × 100.000
+```
+
+As taxas são arredondadas para duas casas no arquivo processado. Os cálculos são feitos antes do
+arredondamento.
+
+## 6. Índice exploratório de lacuna
+
+UBS por 10 mil e hospitais por 100 mil são transformados em percentis nacionais. Empates recebem a
+menor posição compartilhada (`rank(method="min", pct=True)`).
+
+```text
+disponibilidade(m) = 0,65 × percentil_UBS(m)
+                   + 0,35 × percentil_hospitais(m)
+
+índice_lacuna(m) = 100 × [1 - disponibilidade(m)]
+```
+
+Faixas usadas apenas para navegação no painel:
+
+| Índice | Faixa exploratória |
+|---:|---|
+| 0 a <25 | Baixa |
+| 25 a <50 | Moderada |
+| 50 a <75 | Alta |
+| 75 a 100 | Muito alta |
+
+Os pesos são uma decisão transparente do MVP, não um consenso clínico, epidemiológico ou
+regulatório. O índice mede posição relativa: mesmo em um cenário de oferta suficiente para todos,
+ele continuaria ordenando municípios.
+
+## 7. Limitações
+
+1. Município sem hospital pode estar adequadamente atendido por uma rede regional próxima.
+2. Cadastro ativo não comprova funcionamento, equipe, agenda, vaga ou qualidade.
+3. Taxas de municípios pequenos podem ser instáveis e sensíveis a uma única unidade.
+4. O índice não incorpora necessidades distintas por idade, morbidade ou vulnerabilidade social.
+5. Centros cirúrgicos e obstétricos são atributos cadastrais, não medidas de produção.
+6. Leitos foram excluídos porque o endpoint agregado examinado não expõe competência temporal; sua
+   soma poderia misturar snapshots históricos como se fossem oferta atual.
+7. Boa Esperança do Norte (MT) integra a população de 2025, mas ainda não aparece na malha
+   simplificada devolvida pelo serviço utilizado. O município permanece na tabela e nos cálculos,
+   ficando ausente apenas do mapa.
+
+## 8. Interpretação responsável
+
+Um valor alto no índice é um **sinal para investigação**, não confirmação de desassistência. Uma
+avaliação aplicada deveria incluir redes de referência, tempo de viagem, capacidade operacional,
+demanda, utilização, resultados e validação por profissionais de saúde pública.
+
+## 9. Reprodutibilidade
+
+```powershell
+python -m pip install -e ".[dev]"
+saude-brasil-update --output-dir data/processed
+pytest
+ruff check .
+```
+
+Consulte também [fontes-e-dicionario.md](fontes-e-dicionario.md) e
+[validacao-e-qualidade.md](validacao-e-qualidade.md).

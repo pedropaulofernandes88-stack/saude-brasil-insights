@@ -1,51 +1,89 @@
 # Saúde Brasil Insights
 
-Painel reproduzível para explorar a disponibilidade municipal de Unidades Básicas de Saúde e
-estabelecimentos hospitalares ativos no Brasil. O projeto integra dados oficiais, explicita
-limitações e entrega um
-produto executável — não apenas um notebook.
+[![CI](https://github.com/pedropaulofernandes88-stack/saude-brasil-insights/actions/workflows/ci.yml/badge.svg)](https://github.com/pedropaulofernandes88-stack/saude-brasil-insights/actions/workflows/ci.yml)
 
-> **Status:** MVP 0.1 concluído. O painel é exploratório e não deve orientar sozinho decisões de
-> alocação, diagnóstico ou assistência clínica.
+Painel interativo e pipeline de dados para explorar diferenças na disponibilidade cadastrada de
+Unidades Básicas de Saúde (UBS) e estabelecimentos hospitalares ativos entre os municípios
+brasileiros.
 
-## O que o projeto demonstra
+O projeto nasceu de uma pergunta simples: **em quais municípios a oferta local cadastrada de
+atenção básica e hospitais é relativamente menor quando comparada à população?** As respostas são
+apresentadas em um mapa, rankings e tabelas filtráveis. O objetivo é gerar hipóteses para análise de
+saúde pública, não diagnosticar sozinho um vazio assistencial.
 
-- engenharia de dados com APIs públicas e paginação;
-- integração entre códigos municipais DATASUS e IBGE;
-- validações de qualidade e pipeline reproduzível;
-- indicadores per capita e metodologia documentada;
-- visualização geoespacial com filtros e exportação;
-- testes automatizados, lint, empacotamento e CI.
+> **Uso responsável:** os indicadores são descritivos e exploratórios. Eles não medem qualidade,
+> ocupação, equipes disponíveis, tempo de deslocamento ou funcionamento em tempo real e não devem
+> orientar isoladamente decisões clínicas ou de alocação de recursos.
+
+## Demonstração do produto
+
+O painel permite:
+
+- visualizar indicadores por município em um mapa do Brasil;
+- filtrar por região, UF e população mínima;
+- comparar UBS e hospitais por habitante;
+- identificar municípios que merecem investigação adicional;
+- consultar os dados consolidados e baixar o recorte em CSV;
+- inspecionar fontes, regras de integração e controles de qualidade.
+
+O snapshot incluído no repositório contém:
+
+| Item | Quantidade |
+|---|---:|
+| Registros municipais com população de 2025 | 5.571 |
+| UBS únicas | 46.848 |
+| Estabelecimentos hospitalares ativos | 6.457 |
+| Municípios com ao menos uma UBS | 5.480 |
+| Municípios com ao menos um hospital | 2.868 |
+| População consolidada | 213.421.037 |
+
+Os valores são gerados pelo pipeline e registrados em
+[`data/processed/metadata.json`](data/processed/metadata.json). Eles podem mudar quando as fontes
+oficiais forem atualizadas.
+
+## Tecnologias e competências demonstradas
+
+- Python, Pandas, Requests, Streamlit e Plotly;
+- consumo resiliente de APIs públicas paginadas;
+- integração de identificadores DATASUS e IBGE;
+- indicadores per capita e análise geoespacial;
+- validação de dados, testes, lint e GitHub Actions;
+- documentação metodológica e comunicação responsável de limitações.
 
 ## Fontes oficiais
 
 | Fonte | Uso | Referência |
 |---|---|---|
-| SIDRA/IBGE, tabela 6579 | Estimativa municipal mais recente de população | [API SIDRA](https://apisidra.ibge.gov.br/) |
-| Malhas/IBGE | Limites municipais simplificados | [Serviço de dados](https://servicodados.ibge.gov.br/api/docs/malhas?versao=3) |
-| Dados Abertos do SUS | UBS e estabelecimentos hospitalares ativos | [API do Ministério da Saúde](https://apidadosabertos.saude.gov.br/v1/) |
+| SIDRA/IBGE — tabela 6579 | Estimativa municipal de população | [API SIDRA](https://apisidra.ibge.gov.br/) |
+| Malhas/IBGE | Limites municipais simplificados | [API de Malhas](https://servicodados.ibge.gov.br/api/docs/malhas?versao=3) |
+| Ministério da Saúde | UBS e estabelecimentos hospitalares ativos | [API de Dados Abertos](https://apidadosabertos.saude.gov.br/v1/) |
 
-O snapshot incluído pode ser recriado a qualquer momento pelo pipeline. Nenhum dado pessoal é
-utilizado.
+O painel utiliza apenas dados agregados ou cadastrais de estabelecimentos. Nenhum dado individual
+de paciente é armazenado no repositório.
 
-## Executar localmente
+## Como executar
 
 Requer Python 3.11 ou superior.
 
 ```powershell
+git clone https://github.com/pedropaulofernandes88-stack/saude-brasil-insights.git
+cd saude-brasil-insights
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
 streamlit run app.py
 ```
 
-O repositório já inclui um snapshot processado. Para atualizá-lo:
+O repositório inclui um snapshot processado, portanto o painel pode ser aberto sem baixar novamente
+as bases nacionais.
+
+Para reconstruir o snapshot usando as fontes oficiais:
 
 ```powershell
 saude-brasil-update --output-dir data/processed
 ```
 
-Testes e lint:
+Para executar as verificações locais:
 
 ```powershell
 pytest
@@ -56,22 +94,21 @@ ruff check .
 
 - **UBS por 10 mil habitantes**;
 - **hospitais por 100 mil habitantes**;
-- **hospitais por 100 mil habitantes**;
-- **centros cirúrgicos e obstétricos por 100 mil habitantes**;
-- **índice de lacuna assistencial**, de 0 a 100.
+- **centros cirúrgicos por 100 mil habitantes**;
+- **centros obstétricos por 100 mil habitantes**;
+- **índice exploratório de lacuna assistencial**, de 0 a 100.
 
-O índice é o complemento do percentil ponderado de disponibilidade municipal:
+O índice combina a posição relativa de cada município no país:
 
 ```text
-disponibilidade = 65% × percentil(UBS/10 mil)
-                + 35% × percentil(hospitais/100 mil)
+disponibilidade relativa = 65% × percentil(UBS por 10 mil)
+                         + 35% × percentil(hospitais por 100 mil)
 
-índice de lacuna = 100 × (1 - disponibilidade)
+índice de lacuna = 100 × (1 - disponibilidade relativa)
 ```
 
-Esse índice é deliberadamente simples e auditável. Ele ajuda a levantar hipóteses, mas não mede
-tempo de deslocamento, demanda reprimida, qualidade, equipes, ocupação, referência regional ou
-capacidade operacional.
+Quanto maior o índice, menor é a disponibilidade local relativa dentro das duas dimensões do MVP.
+Ele não representa probabilidade, necessidade clínica nem meta regulatória.
 
 ## Arquitetura
 
@@ -90,39 +127,35 @@ flowchart LR
 ```text
 .
 ├── app.py
-├── data/processed/             # snapshot pronto para o painel
+├── data/processed/             # snapshot consumido pelo painel
+├── docs/
+│   ├── metodologia.md          # escopo, fórmulas e limitações
+│   ├── fontes-e-dicionario.md  # linhagem e definição das colunas
+│   └── validacao-e-qualidade.md
 ├── src/saude_brasil_insights/
 │   ├── data_sources.py         # clientes das APIs
-│   ├── transform.py            # limpeza, integração e indicadores
+│   ├── transform.py            # integração e indicadores
 │   └── pipeline.py             # atualização executável
 ├── tests/
-├── docs/
 └── .github/workflows/ci.yml
 ```
 
-## Decisões de qualidade
+## Documentação
 
-1. UBS são deduplicadas por código CNES dentro do município.
-2. O código DATASUS de seis dígitos é associado aos seis primeiros dígitos do código IBGE.
-   O código legado `530040` (Ceilândia) é agregado a `530010` (Brasília) para manter o nível
-   municipal da análise.
-3. Hospitais são filtrados para situação ativa e tipos CNES hospital geral, especializado, unidade
-   mista e hospital-dia isolado.
-4. Contagens ausentes após a integração são interpretadas como zero e reportadas nos metadados.
-5. Boa Esperança do Norte (MT) aparece na população de 2025, mas ainda não possui polígono no
-   serviço de malhas usado; permanece nas tabelas e fica ausente apenas do mapa.
-
-Veja [docs/metodologia.md](docs/metodologia.md) para riscos, critérios e melhorias previstas.
+- [Metodologia e limitações](docs/metodologia.md)
+- [Fontes e dicionário de dados](docs/fontes-e-dicionario.md)
+- [Validação e qualidade](docs/validacao-e-qualidade.md)
+- [Roadmap do portfólio](ROADMAP_PORTFOLIO.md)
 
 ## Próximas evoluções
 
-- medir distância até o hospital de referência, e não apenas oferta dentro do município;
-- integrar leitos por competência mensal a partir dos arquivos CNES, preservando a dimensão temporal;
-- incluir equipes, especialidades e séries históricas;
-- automatizar atualização mensal com artefato versionado;
-- publicar uma API de consulta e um dashboard hospedado;
-- revisar pesos do índice com especialistas de saúde pública.
+- medir distância e tempo até o hospital de referência;
+- integrar leitos por competência mensal, preservando a dimensão temporal;
+- incluir equipes, especialidades, demanda e séries históricas;
+- revisar os pesos do índice com especialistas de saúde pública;
+- publicar uma API de consulta e hospedar o dashboard.
 
 ## Licença
 
-Código sob licença MIT. As fontes mantêm suas respectivas condições de uso e atribuição.
+O código está sob licença MIT. Cada fonte de dados mantém suas próprias condições de uso e
+atribuição.
