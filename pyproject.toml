@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "saude-brasil-insights"
-version = "0.1.0"
+version = "0.2.0"
 description = "Painel reproduzivel de acesso a saude nos municipios brasileiros"
 readme = "README.md"
 requires-python = ">=3.11"

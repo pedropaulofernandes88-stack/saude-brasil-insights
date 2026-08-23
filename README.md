@@ -97,6 +97,10 @@ pytest
 ruff check .
 ```
 
+Para reproduzir exatamente o ambiente validado, instale `requirements.lock`. A imagem Docker
+executa o painel como usuário não privilegiado: `docker build -t saude-insights .` e
+`docker run --rm -p 8501:8501 saude-insights`.
+
 ## Indicadores
 
 - **UBS por 10 mil habitantes**;
