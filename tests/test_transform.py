@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from saude_brasil_insights.transform import (
+    add_geographic_access_proxy,
     add_indicators,
     aggregate_ubs,
     build_municipal_dataset,
@@ -93,6 +94,35 @@ def test_gap_index_is_higher_when_availability_is_lower() -> None:
 
     assert result.loc[0, "indice_lacuna"] > result.loc[1, "indice_lacuna"]
     assert result.loc[1, "indice_lacuna"] > result.loc[2, "indice_lacuna"]
+    assert result["indice_lacuna"].equals(result["indice_lacuna_peso_ubs_065"])
+    assert result["estabilidade_ranking"].between(0, 100).all()
+
+
+def test_geographic_proxy_finds_nearest_hospital_municipality() -> None:
+    frame = pd.DataFrame(
+        {
+            "ibge7": ["1000001", "1000002", "1000003"],
+            "hospitais": [1, 0, 1],
+        }
+    )
+    geojson = {
+        "features": [
+            {
+                "properties": {"codarea": code},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[[lon, 0], [lon + 0.1, 0], [lon + 0.1, 0.1], [lon, 0]]],
+                },
+            }
+            for code, lon in [("1000001", 0.0), ("1000002", 1.0), ("1000003", 10.0)]
+        ]
+    }
+
+    result = add_geographic_access_proxy(frame, geojson)
+
+    assert result.loc[0, "distancia_hospital_proxy_km"] == 0
+    assert result.loc[1, "ibge7_hospital_proxy_mais_proximo"] == "1000001"
+    assert result.loc[1, "distancia_hospital_proxy_km"] > 100
 
 
 def test_population_rejects_duplicate_codes() -> None:

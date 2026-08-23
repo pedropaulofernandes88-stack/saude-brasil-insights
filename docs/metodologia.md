@@ -107,7 +107,26 @@ Os pesos são uma decisão transparente do MVP, não um consenso clínico, epide
 regulatório. O índice mede posição relativa: mesmo em um cenário de oferta suficiente para todos,
 ele continuaria ordenando municípios.
 
-## 7. Limitações
+### 6.1 Análise de sensibilidade
+
+O pipeline repete o cálculo com pesos de UBS de 0%, 25%, 50%, 65%, 75% e 100%, mantendo o
+complemento para hospitais. Para cada município são publicados a amplitude e o desvio-padrão do
+índice, além de uma estabilidade de ranking de 0 a 100. Quanto mais próximo de 100, menor a
+variação da posição entre os cenários testados. Essa análise revela dependência dos pesos, mas não
+valida qual combinação é substantivamente correta.
+
+## 7. Proxy geográfico de acesso hospitalar
+
+Para cada geometria municipal, calcula-se o centro da caixa envolvente. Em seguida, a fórmula de
+haversine identifica a menor distância geodésica até o centro de um município que possua ao menos
+um hospital ativo no cadastro.
+
+O campo `distancia_hospital_proxy_km` é uma medida exploratória de separação espacial. Ele **não é
+distância por rodovia, tempo de viagem ou acesso efetivo**. O centro geométrico pode estar longe da
+população e a unidade hospitalar pode estar longe desse centro. O indicador serve para priorizar
+onde uma análise de rede viária e fluxos regionais seria mais útil.
+
+## 8. Limitações
 
 1. Município sem hospital pode estar adequadamente atendido por uma rede regional próxima.
 2. Cadastro ativo não comprova funcionamento, equipe, agenda, vaga ou qualidade.
@@ -120,13 +139,16 @@ ele continuaria ordenando municípios.
    simplificada devolvida pelo serviço utilizado. O município permanece na tabela e nos cálculos,
    ficando ausente apenas do mapa.
 
-## 8. Interpretação responsável
+8. O proxy territorial não incorpora estradas, rios, relevo, transporte ou localização exata das
+   unidades.
+
+## 9. Interpretação responsável
 
 Um valor alto no índice é um **sinal para investigação**, não confirmação de desassistência. Uma
 avaliação aplicada deveria incluir redes de referência, tempo de viagem, capacidade operacional,
 demanda, utilização, resultados e validação por profissionais de saúde pública.
 
-## 9. Reprodutibilidade
+## 10. Reprodutibilidade
 
 ```powershell
 python -m pip install -e ".[dev]"

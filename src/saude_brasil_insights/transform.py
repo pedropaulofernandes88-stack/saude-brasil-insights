@@ -6,6 +6,7 @@ import re
 import unicodedata
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from .config import UF_TO_REGION
@@ -22,6 +23,8 @@ DATASUS_MUNICIPAL_CODE_ALIASES = {
     # Ceilandia e uma regiao administrativa do DF; no nivel municipal pertence a Brasilia.
     "530040": "530010",
 }
+
+SENSITIVITY_UBS_WEIGHTS = (0.0, 0.25, 0.5, 0.65, 0.75, 1.0)
 
 
 def normalize_text(value: Any) -> str:
@@ -144,11 +147,24 @@ def add_indicators(frame: pd.DataFrame) -> pd.DataFrame:
         result["centros_obstetricos"] / result["populacao"] * 100_000
     )
 
-    availability = (
-        0.65 * _availability_percentile(result["ubs_por_10k"])
-        + 0.35 * _availability_percentile(result["hospitais_por_100k"])
+    ubs_percentile = _availability_percentile(result["ubs_por_10k"])
+    hospital_percentile = _availability_percentile(result["hospitais_por_100k"])
+    sensitivity_columns: list[str] = []
+    for weight in SENSITIVITY_UBS_WEIGHTS:
+        column = f"indice_lacuna_peso_ubs_{int(weight * 100):03d}"
+        availability = weight * ubs_percentile + (1 - weight) * hospital_percentile
+        result[column] = ((1 - availability) * 100).clip(0, 100)
+        sensitivity_columns.append(column)
+    result["indice_lacuna"] = result["indice_lacuna_peso_ubs_065"]
+    result["sensibilidade_amplitude_indice"] = (
+        result[sensitivity_columns].max(axis=1) - result[sensitivity_columns].min(axis=1)
     )
-    result["indice_lacuna"] = ((1 - availability) * 100).clip(0, 100)
+    result["sensibilidade_desvio_indice"] = result[sensitivity_columns].std(axis=1)
+    ranks = result[sensitivity_columns].rank(method="min", ascending=False)
+    denominator = max(len(result) - 1, 1)
+    result["estabilidade_ranking"] = (
+        100 * (1 - (ranks.max(axis=1) - ranks.min(axis=1)) / denominator)
+    ).clip(0, 100)
     result["prioridade_exploratoria"] = pd.cut(
         result["indice_lacuna"],
         bins=[-float("inf"), 25, 50, 75, float("inf")],
@@ -162,8 +178,95 @@ def add_indicators(frame: pd.DataFrame) -> pd.DataFrame:
         "centros_cirurgicos_por_100k",
         "centros_obstetricos_por_100k",
         "indice_lacuna",
+        *sensitivity_columns,
+        "sensibilidade_amplitude_indice",
+        "sensibilidade_desvio_indice",
+        "estabilidade_ranking",
     ]
     result[rate_columns] = result[rate_columns].round(2)
+    return result
+
+
+def _geometry_center(geometry: dict[str, Any]) -> tuple[float, float] | None:
+    """Retorna o centro da caixa envolvente; proxy explicito, nao centro populacional."""
+    geometry_type = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if geometry_type not in {"Polygon", "MultiPolygon"} or not isinstance(coordinates, list):
+        return None
+
+    points: list[tuple[float, float]] = []
+
+    def collect(value: Any) -> None:
+        if (
+            isinstance(value, list)
+            and len(value) >= 2
+            and isinstance(value[0], (int, float))
+            and isinstance(value[1], (int, float))
+        ):
+            points.append((float(value[0]), float(value[1])))
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(coordinates)
+    if not points:
+        return None
+    longitudes, latitudes = zip(*points, strict=True)
+    return (min(latitudes) + max(latitudes)) / 2, (min(longitudes) + max(longitudes)) / 2
+
+
+def add_geographic_access_proxy(
+    frame: pd.DataFrame, geojson: dict[str, Any]
+) -> pd.DataFrame:
+    """Calcula distancia geodesica ate o centro municipal hospitalar mais proximo."""
+    centers: dict[str, tuple[float, float]] = {}
+    for feature in geojson.get("features", []):
+        code = str(feature.get("properties", {}).get("codarea", ""))
+        center = _geometry_center(feature.get("geometry") or {})
+        if code and center:
+            centers[code] = center
+
+    result = frame.copy()
+    mapped = result["ibge7"].astype(str).map(centers)
+    result["centroide_lat_proxy"] = mapped.map(
+        lambda value: value[0] if isinstance(value, tuple) else np.nan
+    )
+    result["centroide_lon_proxy"] = mapped.map(
+        lambda value: value[1] if isinstance(value, tuple) else np.nan
+    )
+
+    hospital_mask = result["hospitais"].gt(0) & result["centroide_lat_proxy"].notna()
+    if not hospital_mask.any():
+        raise ValueError("Nao ha municipio com hospital e geometria para calcular o proxy.")
+
+    hospital_rows = result.loc[
+        hospital_mask, ["ibge7", "centroide_lat_proxy", "centroide_lon_proxy"]
+    ].reset_index(drop=True)
+    hospital_lat = np.radians(hospital_rows["centroide_lat_proxy"].to_numpy())
+    hospital_lon = np.radians(hospital_rows["centroide_lon_proxy"].to_numpy())
+    distances = np.full(len(result), np.nan)
+    nearest_codes: list[str | None] = [None] * len(result)
+    earth_radius_km = 6371.0088
+
+    valid_indices = np.flatnonzero(result["centroide_lat_proxy"].notna().to_numpy())
+    for start in range(0, len(valid_indices), 256):
+        batch_indices = valid_indices[start : start + 256]
+        lat = np.radians(result.iloc[batch_indices]["centroide_lat_proxy"].to_numpy())[:, None]
+        lon = np.radians(result.iloc[batch_indices]["centroide_lon_proxy"].to_numpy())[:, None]
+        delta_lat = hospital_lat[None, :] - lat
+        delta_lon = hospital_lon[None, :] - lon
+        haversine = (
+            np.sin(delta_lat / 2) ** 2
+            + np.cos(lat) * np.cos(hospital_lat[None, :]) * np.sin(delta_lon / 2) ** 2
+        )
+        matrix = 2 * earth_radius_km * np.arcsin(np.sqrt(np.clip(haversine, 0, 1)))
+        nearest = matrix.argmin(axis=1)
+        distances[batch_indices] = matrix[np.arange(len(batch_indices)), nearest]
+        for row_index, hospital_index in zip(batch_indices, nearest, strict=True):
+            nearest_codes[int(row_index)] = str(hospital_rows.iloc[hospital_index]["ibge7"])
+
+    result["distancia_hospital_proxy_km"] = np.round(distances, 2)
+    result["ibge7_hospital_proxy_mais_proximo"] = pd.Series(nearest_codes, dtype="string")
     return result
 
 

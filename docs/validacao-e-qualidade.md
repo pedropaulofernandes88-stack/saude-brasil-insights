@@ -16,6 +16,7 @@ Snapshot gerado em `2026-08-23T19:01:32Z`, com população de referência de 202
 | Códigos hospitalares inválidos | 0 |
 | Feições municipais no GeoJSON | 5.570 |
 | Municípios sem geometria | 1 |
+| Municípios com proxy territorial | 5.570 |
 
 Os valores acima correspondem a `data/processed/metadata.json`. Este documento descreve o snapshot
 versionado; após uma atualização, ele deve ser revisado junto com os metadados.

@@ -11,6 +11,10 @@ atenção básica e hospitais é relativamente menor quando comparada à popula�
 apresentadas em um mapa, rankings e tabelas filtráveis. O objetivo é gerar hipóteses para análise de
 saúde pública, não diagnosticar sozinho um vazio assistencial.
 
+A versão atual também publica uma análise de sensibilidade dos pesos e um proxy territorial da
+distância geodésica até o município com hospital ativo mais próximo. O proxy não representa rota,
+tempo de viagem ou disponibilidade de atendimento.
+
 > **Uso responsável:** os indicadores são descritivos e exploratórios. Eles não medem qualidade,
 > ocupação, equipes disponíveis, tempo de deslocamento ou funcionamento em tempo real e não devem
 > orientar isoladamente decisões clínicas ou de alocação de recursos.
@@ -22,6 +26,8 @@ O painel permite:
 - visualizar indicadores por município em um mapa do Brasil;
 - filtrar por região, UF e população mínima;
 - comparar UBS e hospitais por habitante;
+- alternar seis cenários de ponderação e inspecionar estabilidade do ranking;
+- explorar um proxy territorial disponível para 5.570 municípios;
 - identificar municípios que merecem investigação adicional;
 - consultar os dados consolidados e baixar o recorte em CSV;
 - inspecionar fontes, regras de integração e controles de qualidade.
@@ -47,6 +53,7 @@ oficiais forem atualizadas.
 - consumo resiliente de APIs públicas paginadas;
 - integração de identificadores DATASUS e IBGE;
 - indicadores per capita e análise geoespacial;
+- análise de sensibilidade e explicitação de incerteza metodológica;
 - validação de dados, testes, lint e GitHub Actions;
 - documentação metodológica e comunicação responsável de limitações.
 

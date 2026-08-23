@@ -15,7 +15,7 @@ from .data_sources import (
     fetch_population,
     fetch_ubs,
 )
-from .transform import build_municipal_dataset
+from .transform import add_geographic_access_proxy, build_municipal_dataset
 
 
 def update_data(output_dir: Path) -> dict[str, object]:
@@ -47,6 +47,10 @@ def update_data(output_dir: Path) -> dict[str, object]:
     quality["municipalities_without_geometry"] = int(
         (~dataset["ibge7"].astype(str).isin(geojson_codes)).sum()
     )
+    dataset = add_geographic_access_proxy(dataset, geojson)
+    quality["municipalities_with_access_proxy"] = int(
+        dataset["distancia_hospital_proxy_km"].notna().sum()
+    )
 
     dataset_path = output_dir / "municipios.csv"
     geojson_path = output_dir / "municipios.geojson"
@@ -68,6 +72,11 @@ def update_data(output_dir: Path) -> dict[str, object]:
             "gap_index": (
                 "complemento do percentil ponderado de disponibilidade: "
                 "65% UBS e 35% estabelecimentos hospitalares ativos"
+            ),
+            "sensitivity": "pesos UBS de 0%, 25%, 50%, 65%, 75% e 100%",
+            "geographic_access_proxy": (
+                "distancia geodesica entre centros das caixas envolventes municipais e o "
+                "centro do municipio com hospital ativo mais proximo; nao representa viagem"
             ),
         },
     }

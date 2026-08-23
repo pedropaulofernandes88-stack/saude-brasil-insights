@@ -65,6 +65,7 @@ def test_quality_report_matches_metadata() -> None:
         "Códigos hospitalares inválidos": quality["hospital_rows_invalid_code"],
         "Feições municipais no GeoJSON": quality["geojson_features"],
         "Municípios sem geometria": quality["municipalities_without_geometry"],
+        "Municípios com proxy territorial": quality["municipalities_with_access_proxy"],
     }
     for label, value in expected_rows.items():
         assert f"| {label} | {format_pt_br(value)} |" in report

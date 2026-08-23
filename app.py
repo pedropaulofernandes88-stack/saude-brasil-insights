@@ -16,6 +16,7 @@ METRICS = {
     "Índice de lacuna assistencial": "indice_lacuna",
     "UBS por 10 mil habitantes": "ubs_por_10k",
     "Hospitais por 100 mil habitantes": "hospitais_por_100k",
+    "Distância proxy até município com hospital": "distancia_hospital_proxy_km",
     "Centros cirúrgicos por 100 mil habitantes": "centros_cirurgicos_por_100k",
     "Centros obstétricos por 100 mil habitantes": "centros_obstetricos_por_100k",
 }
@@ -24,8 +25,20 @@ METRIC_HELP = {
     "indice_lacuna": "0 indica maior disponibilidade relativa e 100, maior lacuna relativa.",
     "ubs_por_10k": "Quantidade de UBS cadastradas para cada 10 mil habitantes.",
     "hospitais_por_100k": "Quantidade de hospitais para cada 100 mil habitantes.",
+    "distancia_hospital_proxy_km": (
+        "Distância geodésica entre centros municipais; não é distância viária nem tempo de viagem."
+    ),
     "centros_cirurgicos_por_100k": "Hospitais com centro cirúrgico por 100 mil habitantes.",
     "centros_obstetricos_por_100k": "Hospitais com centro obstétrico por 100 mil habitantes.",
+}
+
+SENSITIVITY_SCENARIOS = {
+    "0% UBS / 100% hospitais": "indice_lacuna_peso_ubs_000",
+    "25% UBS / 75% hospitais": "indice_lacuna_peso_ubs_025",
+    "50% UBS / 50% hospitais": "indice_lacuna_peso_ubs_050",
+    "65% UBS / 35% hospitais (principal)": "indice_lacuna_peso_ubs_065",
+    "75% UBS / 25% hospitais": "indice_lacuna_peso_ubs_075",
+    "100% UBS / 0% hospitais": "indice_lacuna_peso_ubs_100",
 }
 
 
@@ -130,7 +143,15 @@ with st.sidebar:
     )
     metric_label = st.selectbox("Indicador do mapa", options=list(METRICS))
     metric = METRICS[metric_label]
-    st.caption(METRIC_HELP[metric])
+    if metric == "indice_lacuna":
+        scenario = st.selectbox(
+            "Cenário do índice",
+            options=list(SENSITIVITY_SCENARIOS),
+            index=3,
+            help="Permite verificar se a conclusão muda com os pesos de UBS e hospitais.",
+        )
+        metric = SENSITIVITY_SCENARIOS[scenario]
+    st.caption(METRIC_HELP[METRICS[metric_label]])
     st.divider()
     st.caption(f"População de referência: {metadata['population_year']}")
     generated_date = metadata["generated_at_utc"][:10]
@@ -162,7 +183,7 @@ kpi3.metric("UBS cadastradas", format_integer(filtered["ubs"].sum()))
 kpi4.metric("Hospitais ativos", format_integer(filtered["hospitais"].sum()))
 
 st.subheader("Distribuição municipal")
-color_scale = "YlOrRd" if metric == "indice_lacuna" else "Tealgrn"
+color_scale = "YlOrRd" if metric.startswith("indice_lacuna") else "Tealgrn"
 map_figure = px.choropleth(
     filtered,
     geojson=geojson,
@@ -263,6 +284,9 @@ display_columns = {
     "hospitais_por_100k": "Hospitais / 100 mil",
     "indice_lacuna": "Índice de lacuna",
     "prioridade_exploratoria": "Faixa exploratória",
+    "distancia_hospital_proxy_km": "Distância proxy hospitalar (km)",
+    "sensibilidade_amplitude_indice": "Amplitude entre cenários",
+    "estabilidade_ranking": "Estabilidade do ranking (0–100)",
 }
 table = filtered[list(display_columns)].rename(columns=display_columns)
 st.dataframe(table, width="stretch", hide_index=True, height=420)
@@ -272,6 +296,24 @@ st.download_button(
     file_name="saude_brasil_insights_recorte.csv",
     mime="text/csv",
 )
+
+with st.expander("Análise de sensibilidade dos pesos"):
+    st.markdown(
+        "A amplitude mostra quanto o índice municipal varia entre seis combinações de pesos. "
+        "A estabilidade resume a variação da posição no ranking: valores próximos de 100 "
+        "indicam menor dependência dos pesos testados."
+    )
+    sensitivity = filtered.nlargest(20, "sensibilidade_amplitude_indice")[
+        [
+            "municipio",
+            "uf",
+            "indice_lacuna",
+            "sensibilidade_amplitude_indice",
+            "sensibilidade_desvio_indice",
+            "estabilidade_ranking",
+        ]
+    ]
+    st.dataframe(sensitivity, width="stretch", hide_index=True)
 
 with st.expander("Metodologia, qualidade e limitações"):
     st.markdown(
@@ -283,6 +325,8 @@ with st.expander("Metodologia, qualidade e limitações"):
         - Municípios pequenos podem depender adequadamente de redes regionais; por isso, ausência
           local de hospital não equivale automaticamente a desassistência.
         - Cadastro não prova funcionamento, disponibilidade em tempo real, qualidade ou acesso.
+        - A distância é um proxy geodésico entre centros de caixas envolventes municipais; não
+          considera estradas, barreiras, referência regional, transporte ou tempo de viagem.
         """
     )
     st.json(metadata["quality"], expanded=False)
